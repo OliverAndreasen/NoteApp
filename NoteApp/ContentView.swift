@@ -6,25 +6,29 @@
 //
 
 import SwiftUI
+import Firebase
 
 // Define a struct called ContentView that conforms to the View protocol
 struct ContentView: View {
-    // Create a State property called notes that is an array of Note structs
-    @State public var notes = [Note]()
+    @ObservedObject var dataManager: DataManager
     
+    init(dataManager: DataManager) {
+        self.dataManager = dataManager
+    }
     // Implement the body property of the View protocol
     var body: some View {
         // Wrap the content in a NavigationView
+
         NavigationView {
             VStack {
-                // Create a horizontal stack containing a spacer and a button
+                // Create a horizontal stack containin spacer and a button
                 HStack {
                     // Add a spacer to push the button to the right side
                     Spacer()
                     // Define the action that should be taken when the button is tapped
+
                     Button(action: {
-                        // Append a new Note to the notes array
-                        self.notes.append(Note(id: UUID(), title: "New Note", content: ""))
+                        self.dataManager.Notes.append(Note(id: UUID().uuidString, title: "New Note", content: ""))
                     }) {
                         // Define the appearance of the button as a plus symbol
                         Image(systemName: "plus")
@@ -33,12 +37,12 @@ struct ContentView: View {
                     }
                 }
                 // Add some padding to the horizontal stack
+
                 .padding()
                 // Create a list of notes using the notes array
-                List(notes) {
-                    note in
+                List(dataManager.Notes) { note in
                     // Wrap each note in a NavigationLink
-                    NavigationLink(destination: NoteEditorView(notes: self.$notes, note: note)) {
+                    NavigationLink(destination: NoteEditorView(dataManager: self.dataManager, note: note)) {
                         // Display the title of each note in the list
                         Text(note.title)
                     }
@@ -49,14 +53,11 @@ struct ContentView: View {
         }
     }
 }
-
 // Define a struct called NoteEditorView that conforms to the View protocol
 struct NoteEditorView: View {
-    // Create a Binding property called notes that is an array of Note structs
-    @Binding public var notes: [Note]
+    @ObservedObject var dataManager: DataManager
     // Create a State property called note that is a Note struct
-    @State public var note: Note
-    
+    @State var note: Note
     // Implement the body property of the View protocol
     var body: some View {
         // Wrap the content in a NavigationView
@@ -69,14 +70,20 @@ struct NoteEditorView: View {
             }
             // Add a save button to the right side of the navigation bar
             .navigationBarItems(trailing: Button(action: {
-                // Find the index of the current note in the notes array
-                let index = self.notes.firstIndex {
-                    $0.id == self.note.id
+                if let index = self.dataManager.Notes.firstIndex(where: { $0.id == self.note.id }) {
+                    self.dataManager.Notes[index] = self.note
+                } else {
+                    self.dataManager.Notes.append(self.note)
                 }
-                // Update the current note in the notes array
-                if let index = index {
-                    self.notes[index] = self.note
-                }
+                
+                let db = Firestore.firestore()
+                let reference = db.collection("Notes")
+                
+                reference.document(self.note.id).setData([
+                    "id": self.note.id,
+                    "title": self.note.title,
+                    "content": self.note.content
+                ])
             }) {
                 Text("Save")
             })
@@ -84,18 +91,9 @@ struct NoteEditorView: View {
     }
 }
 
-// Define a struct called Note that conforms to the Identifiable protocol
-struct Note: Identifiable {
-    // A unique identifier for the note
-    var id: UUID
-    // The title of the note
-    var title: String
-    // The content of the note
-    var content: String
-}
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView()
+        ContentView(dataManager: DataManager()) // Create an instance of DataManager and pass it to ContentView
     }
 }
